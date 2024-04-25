@@ -4,16 +4,7 @@ from huggingface_hub.hf_api import HfFolder
 import torch
 from torch.nn import functional as F
 from datasets import load_dataset
-from transformers import (
-    AutoModelForCausalLM,
-    AutoTokenizer,
-    BitsAndBytesConfig,
-    TrainingArguments,
-    pipeline,
-    logging,
-)
-from peft import LoraConfig, PeftModel
-from trl import SFTTrainer
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 import nltk
 from rouge import Rouge
@@ -21,71 +12,83 @@ from bert_score import BERTScorer
 from evaluate import load
 import matplotlib.pyplot as plt
 
-
 # load model and tokenizer
+access_token="hf_token"
+model_path = "model/path"
+model = AutoModelForCausalLM.from_pretrained(model_path, token=access_token)
 
-model_path = "./mistral-finetuned"
-model = AutoModelForCausalLM.from_pretrained(model_path)
-#print(model)
+print(model)
 
-tokenizer = AutoTokenizer.from_pretrained(model_path)
+# initialize tokenizer
+tokenizer = AutoTokenizer.from_pretrained(model_path, token=access_token)
+tokenizer.pad_token = tokenizer.eos_token
 
 # load dataset
-
 #dataset = load_dataset("lighteval/mmlu", "abstract_algebra", split="validation")
 #dataset = dataset.select(range(10))
 
 # Example prompts
 #prompt=f'Answer this question with one word: Is the sky blue?'
-#prompt='The color of the sky is'
-#prompt='Answer this question in one word: Is grass red, blue, or green?'
-prompt="Birds fly high up in the "
-########prompt=f'The Question is {dataset["question"][0]}. You will only answer the question with one of the options provided in this list: {dataset["choices"][0]}
-print(prompt)
+#prompt=f'The Question is {dataset["question"][0]}. You will only answer the question with one of the options provided in this list: {dataset["choices"][0]}
 data = [["Birds fly high in the ", "sky"], ["The color of the sky is ", "blue"], ["The color of grass is ", "green"], ["People drive in ", "cars"]]
 
 # Generate outputs for each data point. 10?
-with torch.no_grad():
-	tokens = tokenizer(prompt, return_tensors='pt', padding=True, max_length=1024)
-	output = model.generate(**tokens, num_return_sequences=1, return_dict_in_generate=True, output_logits=True, output_hidden_states=True, max_new_tokens=1)
+outputs = []
+for i in range(len(data)):
+  with torch.no_grad():
+    tokens = tokenizer(data[i][0], return_tensors='pt', padding=True, max_length=1024)
+    output = model.generate(**tokens, num_return_sequences=1, return_dict_in_generate=True, output_logits=True, output_hidden_states=True, max_new_tokens=1)
+    outputs.append(output)
+    
+# Get tokens and scores (at least top 20) for layers 8, 16, 24, and 32 by default
+def top_best_tokens(output, layer_num, token_limit=20):
+  # Get the probabilty distribution for the output (ie what's the next most likely token)
+  token_probs = F.softmax(model.lm_head(output.hidden_states[0][layer_num][0,-1, :]), dim=-1)
+  # print(f"The number of tokens in the vocabulary is {len(token_probs)}")
+  # ^I had printed to confirm that there are 32000 tokens in the vocabulary
+  token_prob_list = token_probs.tolist()
 
+  # Sort the list so we can look at the tokens with the highest probabilties
+  best_token_probs = sorted(token_prob_list, reverse=True)[:token_limit]
 
-#tokens['decoder_input_ids'] = tokens['input_ids'].clone()
-#print(tokenizer.decode(tokens['input_ids'][0], skip_special_tokens=True))
+  # Create a dictionary to map a given probability to it's token
+  prob_to_token_dict = {}
+  for i in range(len(token_prob_list)):
+    prob_to_token_dict[token_prob_list[i]]=i
 
-print(output.sequences[:, tokens['input_ids'].shape[-1]:])
-print(tokenizer.batch_decode(output.sequences[:, tokens['input_ids'].shape[-1]:], skip_special_tokens=True))
+  print("best prob: ", best_token_probs[0], ", best token: ", tokenizer.decode(prob_to_token_dict[best_token_probs[0]], skip_special_tokens=True))
 
+  # Create of list the best tokens from the best token probabilities
+  best_decoded_tokens = []
+  for i in range(token_limit):
+    best_decoded_tokens.append(tokenizer.decode(prob_to_token_dict[best_token_probs[i]], skip_special_tokens=True))
+  return best_decoded_tokens, best_token_probs
+  
+  
+def get_layer_tokens_and_probs(output, layer_nums=[7, 15, 23, 31], token_limit=20, plot=True):
+  layer_to_best_tokens_and_probs = {}
+  # Plot tokens and scores
+  for i in layer_nums:
+    best_decoded_tokens, best_token_probs = top_best_tokens(output, i, token_limit)
+    # Plot the decoded tokens and their probabilities
+    if plot:
+      plt.bar(best_decoded_tokens, best_token_probs)
+      plt.title(f'Layer {i+1}: {token_limit} Most Likely Tokens')
+      plt.xlabel('Best Predctions')
+      plt.xticks(rotation=45)
+      plt.ylabel('Scores')
+      plt.show()
+    layer_to_best_tokens_and_probs[i]=[best_decoded_tokens, best_token_probs]
+  return layer_to_best_tokens_and_probs
+  
+# This will plot the token layers' probabilities for the first example
+compare_layer_probs_of_first_output = get_layer_tokens_and_probs(outputs[0])
 
-#answer_start_index = output.start_logits.argmax()
-#answer_end_index = output.end_logits.argmax()
-#predict_answer_tokens = inputs.input_ids[0, answer_start_index : answer_end_index + 1]
-#print(tokenizer.decode(predict_answer_tokens))
-
-#print(tokenizer.decode(output[0], skip_special_tokens=True))
-
-#decoded_outputs = [tokenizer.decode(output_sequences[0], skip_special_tokens=True) for output_sequences in output.sequences]
-#print(decoded_outputs)
-
-# Get tokens and scores (at least top 5) for layers 8, 16, 24, and 32
-
-with torch.no_grad():
-	prob = F.softmax(model.lm_head(output.hidden_states[0][31][0,-1, :]), dim=-1)
-	prob_list = prob.tolist()
-	best_probs = sorted(prob_list, reverse=True)[:10]
-	print(best_probs)
-	prob_to_token_dict = {}
-	for i in range(len(prob_list)):
-		prob_to_token_dict[prob_list[i]]=i
-	#print(len(prob))
-	#for i in range(7203,7213):
-	#	print(tokenizer.decode(i, skip_special_tokens=True))
-	print(prob_to_token_dict[best_probs[1]], "best prob token")
-	#print(tokenizer.decode(prob_to_token_dict[best_probs[0]], skip_special_tokens=True))
-	print(tokenizer.decode(prob_to_token_dict[best_probs[1]], skip_special_tokens=True))
-	print(sum(prob_list))
-
-# Plot tokens and scores
-
-
-# Evaluate
+# Get top 32 tokens for all 32 layers. Print without plotting
+tab="\t"
+compare_layer_probs_output = get_layer_tokens_and_probs(outputs[0], [i for i in range(32)], 32, False)
+print(f'Layer N: {tab.join([str(i+1) for i in range(32)])}')
+for i in compare_layer_probs_output.keys():
+  print(f'Layer {i+1}: {tab.join(compare_layer_probs_output[i][0])}')
+  
+# Evaluation Metrics
