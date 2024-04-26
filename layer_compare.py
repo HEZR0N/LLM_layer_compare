@@ -88,10 +88,10 @@ compare_layer_probs_of_first_output = get_layer_tokens_and_probs(outputs[0])
 
 # Get top 32 tokens for all 32 layers
 tab="\t"
-compare_layer_probs_output = get_layer_tokens_and_probs(outputs[0], [i for i in range(32)], 32, False)
+compare_32_layers_probs = get_layer_tokens_and_probs(outputs[0], [i for i in range(32)], 32, False)
 print(f'Layer N: {tab.join([str(i+1) for i in range(32)])}')
-for i in compare_layer_probs_output.keys():
-  print(f'Layer {i+1}: {tab.join(compare_layer_probs_output[i][0])}')
+for i in compare_32_layers_probs.keys():
+  print(f'Layer {i+1}: {tab.join(compare_32_layers_probs[i][0])}')
   
 # Evaluation Metrics
 roug = Rouge()
@@ -108,7 +108,7 @@ def get_metrics(new_response, ground_truth):
 
 print("Metrics for: 'Birds fly high in the... sky'")
 print("Layer N: \t\tBLEU\t\tRouge\t\tBERT")
-for layer_num in compare_layer_probs_of_first_output.keys():
-  # print(compare_layer_probs_of_first_output[layer_num][0][0])
-  BLEU, Roug, BERTScore = get_metrics(compare_layer_probs_of_first_output[layer_num][0][0], data[0][1])
+for layer_num in compare_32_layers_probs.keys():
+  # print(compare_32_layers_probs[layer_num][0][0])
+  BLEU, Roug, BERTScore = get_metrics(compare_32_layers_probs[layer_num][0][0], data[0][1])
   print(f"Layer {layer_num+1}: \t\t{BLEU:.4f}\t\t{Roug:.4f}\t\t{BERTScore:.4f}")
