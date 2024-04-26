@@ -7,13 +7,15 @@ from datasets import load_dataset
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 import nltk
+from nltk.translate.bleu_score import sentence_bleu
+nltk.download('punkt')
 from rouge import Rouge
 from bert_score import BERTScorer
 from evaluate import load
 import matplotlib.pyplot as plt
 
 # load model and tokenizer
-access_token="hf_token"
+access_token="YOUR_HF_TOKEN"
 model_path = "model/path"
 model = AutoModelForCausalLM.from_pretrained(model_path, token=access_token)
 
@@ -56,7 +58,7 @@ def top_best_tokens(output, layer_num, token_limit=20):
   for i in range(len(token_prob_list)):
     prob_to_token_dict[token_prob_list[i]]=i
 
-  print("best prob: ", best_token_probs[0], ", best token: ", tokenizer.decode(prob_to_token_dict[best_token_probs[0]], skip_special_tokens=True))
+  print("Layer ", layer_num, " best prob: ", best_token_probs[0], ", best token: ", tokenizer.decode(prob_to_token_dict[best_token_probs[0]], skip_special_tokens=True))
 
   # Create of list the best tokens from the best token probabilities
   best_decoded_tokens = []
@@ -84,7 +86,7 @@ def get_layer_tokens_and_probs(output, layer_nums=[7, 15, 23, 31], token_limit=2
 # This will plot the token layers' probabilities for the first example
 compare_layer_probs_of_first_output = get_layer_tokens_and_probs(outputs[0])
 
-# Get top 32 tokens for all 32 layers. Print without plotting
+# Get top 32 tokens for all 32 layers
 tab="\t"
 compare_layer_probs_output = get_layer_tokens_and_probs(outputs[0], [i for i in range(32)], 32, False)
 print(f'Layer N: {tab.join([str(i+1) for i in range(32)])}')
@@ -92,3 +94,20 @@ for i in compare_layer_probs_output.keys():
   print(f'Layer {i+1}: {tab.join(compare_layer_probs_output[i][0])}')
   
 # Evaluation Metrics
+roug = Rouge()
+bertscore = load("bertscore")
+
+def get_metrics(new_response, ground_truth):
+  blue = nltk.translate.bleu_score.sentence_bleu([ground_truth.split()], new_response.split())
+  red = roug.get_scores(new_response, ground_truth)
+  red = red[0]['rouge-l']['f']
+  raw_bert = bertscore.compute(predictions=[new_response], references=[ground_truth], model_type="distilbert-base-uncased")
+  bert = raw_bert['f1'][0]
+  return blue, red, bert
+
+print("Metrics for: 'Birds fly high in the... sky'")
+print("Layer N: \t\tBLEU\t\tRouge\t\tBERT")
+for layer_num in compare_layer_probs_of_first_output.keys():
+  # print(compare_layer_probs_of_first_output[layer_num][0][0])
+  BLEU, Roug, BERTScore = get_metrics(compare_layer_probs_of_first_output[layer_num][0][0], data[0][1])
+  print(f"Layer {layer_num+1}: \t\t{BLEU:.4f}\t\t{Roug:.4f}\t\t{BERTScore:.4f}")
