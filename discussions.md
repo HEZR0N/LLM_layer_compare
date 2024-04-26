@@ -21,9 +21,8 @@ for layer in layers:
 `factuality_probability = in_layer1 * layer1_weight * rank_N_weight + ... + in_layer32 * layer32_weight * rank_N_weight`
 
 ## Layers effect on diffeent metrics
-Becasue I did not use the same dataset that was used for finetuning to perform layer analysis, I.
 
-I know the purpose of comparing metrics is to see which quality improved first: 
+The purpose of comparing metrics across layers is to see which quality improved first: 
  - Longest common sequence of words (rouge)
  - Number of common n-grams (bleu)
  - Semantics/embeddings similarity
