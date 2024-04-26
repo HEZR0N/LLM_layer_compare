@@ -4,11 +4,11 @@ This repo was created for an assignment in my NLP/LLM class. The goal was to a f
 The finetuned model was based off of:
  - https://huggingface.co/mistralai/Mistral-7B-v0.1/tree/main
 ## Requirements
- - Python 3.11
+ - Python 3.8
 
 Required Libraries/Modules made be installed with this command:
 ```
-pip install transformers trl rouge bert_score evaluate
+pip install transformers trl rouge bert_score evaluate nltk
 ```
 ## Usage
 Edit `layer_compare.py` to set the `model_path` variable to the path to the model your using and set `access_token` to the value of your huggingface access token if you're using it:
