@@ -98,7 +98,8 @@ roug = Rouge()
 bertscore = load("bertscore")
 
 def get_metrics(new_response, ground_truth):
-  blue = nltk.translate.bleu_score.sentence_bleu([ground_truth.split()], new_response.split())
+  blue_weights = (1.0, 0.0, 0.0, 0.0, 0.0)
+  blue = nltk.translate.bleu_score.sentence_bleu([ground_truth.split()], new_response.split(), blue_weights)
   red = roug.get_scores(new_response, ground_truth)
   red = red[0]['rouge-l']['f']
   raw_bert = bertscore.compute(predictions=[new_response], references=[ground_truth], model_type="distilbert-base-uncased")
