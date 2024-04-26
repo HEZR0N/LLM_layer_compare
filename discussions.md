@@ -1,4 +1,4 @@
-### Consistency check method between these layers for factuality analysis
+## Consistency check method between these layers for factuality analysis
 Some research papers have proposed using different models several times or the same model several times to see if the same repsonse can be generated mulitple times. If so, then the response is believed to be more likely true.    
 I believe the same could be true of comparing the different if applied in a certain way. I believe the constrains would have to be loose though, seeing aa in the results I obtained, the correct resposne did not appear 
 in the top 32 highest probability tokens until layer 23. Here's how I would use consistncy to check for factuality
@@ -20,7 +20,7 @@ for layer in layers:
 
 `factuality_probability = in_layer1 * layer1_weight * rank_N_weight + ... + in_layer32 * layer32_weight * rank_N_weight`
 
-### Layers effect on diffeent metrics
+## Layers effect on diffeent metrics
 Becasue I did not use the same dataset that was used for finetuning to perform layer analysis, I.
 
 I know the purpose of comparing metrics is to see which quality improved first: 
